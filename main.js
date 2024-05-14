@@ -1,7 +1,7 @@
 const http = require('http');
 const redis = require('@redis/client');
 
-const REDIS_CONNECT_URL = '';
+const REDIS_CONNECT_URL = 'redis://127.0.0.1:7777/2';
 
 async function main() {
     const redisClient = await redis.createClient({
@@ -14,7 +14,6 @@ async function main() {
         .connect();
 
     http.createServer(async function (req, res) {
-        console.log(req.headers.accept);
         const reqUrl = req.url.substring(1).split('?')[0];
 
         let rejectMessage = '';
@@ -27,9 +26,9 @@ async function main() {
             rejectMessage += 'Client must accept "application/json".\n';
         }
 
-        if (!reqUrl) {
-            rejectMessage += 'Empty endpoint is not allowed.\n';
-        }
+        // if (!reqUrl) {
+        //     rejectMessage += 'Empty endpoint is not allowed.\n';
+        // }
 
         if (rejectMessage) {
             res.writeHead(400);
@@ -38,6 +37,9 @@ async function main() {
             return;
         }
 
+        let responseCode;
+        let responseHeader;
+        let responseBody;
         try {
             const body = await new Promise((resolve, reject) => {
                 let body = [];
@@ -81,18 +83,25 @@ async function main() {
             switch (action) {
                 case 'get':
                     resBody['value'] = await redisClient.get(key);
+                    break;
                 case 'set':
                     await redisClient.set(key, value);
+                    break;
+                default:
+                    break;
             }
 
-            res.writeHead(200, { 'Content-Type': 'application/json' })
-            res.write(JSON.stringify(resBody));
-            res.end();
+            responseCode = 200;
+            responseHeader = { 'Content-Type': 'application/json' };
+            responseBody = JSON.stringify(resBody);
         } catch (e) {
-            res.writeHead(400);
-            res.write(e);
-            res.end();
+            responseCode = 400;
+            responseBody = e;
         }
+
+        res.writeHead(responseCode, responseHeader);
+        res.write(responseBody);
+        res.end();
     }).on('close', () => redisClient.disconnect()).listen(8080);
 }
 
